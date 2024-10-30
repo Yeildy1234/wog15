@@ -1,0 +1,661 @@
+{
+  "version": 2,
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "github": {
+    "silent": true
+  }
+}"use client"
+
+import { useState, useEffect } from 'react'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Youtube, FileText, MessageSquare, Facebook, Watch, Bluetooth, Activity, Search, Phone, Upload, Send, Plus, X, Lock, Unlock, LogOut } from 'lucide-react'
+import { Progress } from "@/components/ui/progress"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { toast, useToast } from "@/components/ui/use-toast"
+import { Switch } from "@/components/ui/switch"
+
+export default function WorkoutGymApp() {
+  const [activeTab, setActiveTab] = useState('home')
+  const [loggedIn, setLoggedIn] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loginCode, setLoginCode] = useState('')
+  const [loginAttempts, setLoginAttempts] = useState(0)
+  const [isLocked, setIsLocked] = useState(false)
+  const [lockTimer, setLockTimer] = useState(0)
+  const [isWatchConnected, setIsWatchConnected] = useState(false)
+  const [caloriesBurned, setCaloriesBurned] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [coverPhoto, setCoverPhoto] = useState('https://v0.dev/placeholder.svg?height=400&width=800')
+  const [videoSlides, setVideoSlides] = useState(Array(6).fill(''))
+  const [members, setMembers] = useState([
+    { id: 1, name: 'John Doe', caloriesBurned: 500, accessCode: 'abc123', lastPasswordReset: new Date(), isActive: true },
+    { id: 2, name: 'Jane Smith', caloriesBurned: 750, accessCode: 'def456', lastPasswordReset: new Date(), isActive: true },
+    { id: 3, name: 'Bob Johnson', caloriesBurned: 600, accessCode: 'ghi789', lastPasswordReset: new Date(), isActive: true },
+  ])
+  const [selectedMembers, setSelectedMembers] = useState([])
+  const [messageContent, setMessageContent] = useState('')
+  const [trainingVideos, setTrainingVideos] = useState([])
+  const [newMemberName, setNewMemberName] = useState('')
+  const { toast } = useToast()
+
+  const [exerciseData, setExerciseData] = useState([
+    { name: 'Mon', calories: 400 },
+    { name: 'Tue', calories: 300 },
+    { name: 'Wed', calories: 500 },
+    { name: 'Thu', calories: 450 },
+    { name: 'Fri', calories: 600 },
+    { name: 'Sat', calories: 400 },
+    { name: 'Sun', calories: 350 },
+  ])
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    // Check for password resets every day
+    const passwordResetCheck = setInterval(() => {
+      setMembers(prevMembers => 
+        prevMembers.map(member => {
+          const daysSinceReset = (new Date() - new Date(member.lastPasswordReset)) / (1000 * 60 * 60 * 24)
+          if (daysSinceReset >= 33) {
+            return {
+              ...member,
+              accessCode: generateAccessCode(),
+              lastPasswordReset: new Date()
+            }
+          }
+          return member
+        })
+      )
+    }, 24 * 60 * 60 * 1000) // Check every 24 hours
+
+    return () => clearInterval(passwordResetCheck)
+  }, [])
+
+  useEffect(() => {
+    // Automatic sign-out when the user closes the application
+    const handleBeforeUnload = () => {
+      handleSignOut()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+
+  const handleLogin = () => {
+    if (loginCode === 'wogapple') {
+      setLoggedIn(true)
+      setIsAdmin(true)
+      setLoginAttempts(0)
+    } else {
+      const member = members.find(m => m.accessCode === loginCode && m.isActive)
+      if (member) {
+        setLoggedIn(true)
+        setLoginAttempts(0)
+      } else {
+        setLoginAttempts(prev => prev + 1)
+        if (loginAttempts + 1 >= 6) {
+          setIsLocked(true)
+          setLockTimer(300) // 5 minutes in seconds
+        }
+        toast({
+          title: "Login Failed",
+          description: "Invalid access code or account is inactive. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleSignOut = () => {
+    setLoggedIn(false)
+    setIsAdmin(false)
+    setLoginCode('')
+    setActiveTab('home')
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out.",
+    })
+  }
+
+  useEffect(() => {
+    let interval
+    if (isLocked && lockTimer > 0) {
+      interval = setInterval(() => {
+        setLockTimer(prev => prev - 1)
+      }, 1000)
+    } else if (lockTimer === 0) {
+      setIsLocked(false)
+      setLoginAttempts(0)
+    }
+    return () => clearInterval(interval)
+  }, [isLocked, lockTimer])
+
+  const connectSmartWatch = () => {
+    setIsWatchConnected(true)
+    toast({
+      title: "Smart Watch Connected",
+      description: "Your smart watch has been successfully connected.",
+    })
+  }
+
+  useEffect(() => {
+    if (isWatchConnected) {
+      const interval = setInterval(() => {
+        setCaloriesBurned(prev => prev + Math.floor(Math.random() * 10))
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [isWatchConnected])
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    toast({
+      title: "Search Results",
+      description: `Showing results for: ${searchQuery}`,
+    })
+  }
+
+  const handleCoverPhotoUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setCoverPhoto(reader.result)
+        toast({
+          title: "Cover Photo Updated",
+          description: "The new cover photo has been successfully uploaded.",
+        })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleVideoSlideUpload = (index) => (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setVideoSlides(prev => {
+          const newSlides = [...prev]
+          newSlides[index] = reader.result
+          return newSlides
+        })
+        toast({
+          title: "Video Slide Updated",
+          description: `Video slide ${index + 1} has been successfully uploaded.`,
+        })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleMemberSelection = (memberId) => {
+    setSelectedMembers(prev => 
+      prev.includes(memberId)
+        ? prev.filter(id => id !== memberId)
+        : [...prev, memberId]
+    )
+  }
+
+  const sendMessage = () => {
+    toast({
+      title: "Message Sent",
+      description: `Message sent to ${selectedMembers.length} member(s).`,
+    })
+    setMessageContent('')
+    setSelectedMembers([])
+  }
+
+  const congratulateTopPerformer = () => {
+    const topPerformer = members.reduce((prev, current) => 
+      (prev.caloriesBurned > current.caloriesBurned) ? prev : current
+    )
+    setMessageContent(`Congratulations ${topPerformer.name} for burning the most calories!`)
+    setSelectedMembers([topPerformer.id])
+    toast({
+      title: "Top Performer Selected",
+      description: `${topPerformer.name} has been selected as the top performer.`,
+    })
+  }
+
+  const handleTrainingVideoUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setTrainingVideos(prev => [...prev, { id: Date.now(), url: reader.result, title: file.name }])
+        toast({
+          title: "Training Video Uploaded",
+          description: "The new training video has been successfully added.",
+        })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const generateAccessCode = () => {
+    return Math.random().toString(36).substring(2, 8).toUpperCase()
+  }
+
+  const addNewMember = () => {
+    if (newMemberName.trim()) {
+      const newMember = {
+        id: members.length + 1,
+        name: newMemberName.trim(),
+        caloriesBurned: 0,
+        accessCode: generateAccessCode(),
+        lastPasswordReset: new Date(),
+        isActive: true,
+      }
+      setMembers(prev => [...prev, newMember])
+      setNewMemberName('')
+      toast({
+        title: "New Member Added",
+        description: `${newMember.name} has been added with access code: ${newMember.accessCode}`,
+      })
+    }
+  }
+
+  const resetPassword = (memberId) => {
+    setMembers(prev => prev.map(member => 
+      member.id === memberId 
+        ? { ...member, accessCode: generateAccessCode(), lastPasswordReset: new Date() } 
+        : member
+    ))
+    toast({
+      title: "Password Reset",
+      description: "A new access code has been generated for the member.",
+    })
+  }
+
+  const toggleMemberAccess = (memberId) => {
+    setMembers(prev => prev.map(member =>
+      member.id === memberId
+        ? { ...member, isActive: !member.isActive }
+        : member
+    ))
+    const member = members.find(m => m.id === memberId)
+    toast({
+      title: `Member Access ${member.isActive ? 'Denied' : 'Granted'}`,
+      description: `Access for ${member.name} has been ${member.isActive ? 'denied' : 'granted'}.`,
+    })
+  }
+
+  if (!loggedIn) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Workout Gym</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {isLocked ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Account Locked</AlertTitle>
+                  <AlertDescription>
+                    Too many failed attempts. Please try again in {Math.floor(lockTimer / 60)}:{(lockTimer % 60).toString().padStart(2, '0')} minutes.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="loginCode">Access Code</Label>
+                    <Input
+                      id="loginCode"
+                      placeholder="Enter your access code"
+                      value={loginCode}
+                      onChange={(e) => setLoginCode(e.target.value)}
+                      disabled={isLocked}
+                    />
+                  </div>
+                  <Button className="w-full" onClick={handleLogin} disabled={isLocked}>
+                    Login
+                  </Button>
+                  {loginAttempts > 0 && (
+                    <p className="text-sm text-red-500">
+                      Incorrect code. Attempts remaining: {6 - loginAttempts}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">Workout Gym</h1>
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              {currentTime.toLocaleString()}
+            </div>
+            {!isAdmin && (
+              <Button
+                onClick={connectSmartWatch}
+                disabled={isWatchConnected}
+                className="flex items-center space-x-2"
+                size="sm"
+              >
+                <Bluetooth className="h-4 w-4" />
+                <span className="hidden sm:inline">{isWatchConnected ? 'Connected' : 'Connect Watch'}</span>
+              </Button>
+            )}
+            {isWatchConnected && !isAdmin && (
+              <div className="flex items-center space-x-2 text-green-600">
+                <Activity className="h-4 w-4" />
+                <span>{caloriesBurned}</span>
+              </div>
+            )}
+            <Button onClick={handleSignOut} size="sm" variant="outline">
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <Tabs  value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex justify-start overflow-x-auto">
+            <TabsTrigger value="home">Home</TabsTrigger>
+            <TabsTrigger value="videos">Training</TabsTrigger>
+            {!isAdmin && <TabsTrigger value="progress">Progress</TabsTrigger>}
+            <TabsTrigger value="messages">Messages</TabsTrigger>
+            {isAdmin && <TabsTrigger value="admin">Admin</TabsTrigger>}
+          </TabsList>
+          <TabsContent value="home">
+            <Card>
+              <CardHeader>
+                <CardTitle>Welcome to Workout Gym</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <img
+                  src={coverPhoto}
+                  alt="Workout Gym Cover"
+                  className="w-full h-auto rounded-lg shadow-lg mb-4"
+                />
+                {isAdmin && (
+                  <div className="mb-4">
+                    <Input
+                      type="file"
+                      onChange={handleCoverPhotoUpload}
+                      accept="image/*"
+                    />
+                  </div>
+                )}
+                <Carousel className="w-full max-w-xs mx-auto">
+                  <CarouselContent>
+                    {videoSlides.map((slide, index) => (
+                      <CarouselItem key={index}>
+                        {slide ? (
+                          <video src={slide} controls className="w-full aspect-video" />
+                        ) : (
+                          <div className="w-full aspect-video bg-gray-200 flex items-center justify-center">
+                            <Youtube className="h-12 w-12 text-gray-400" />
+                          </div>
+                        )}
+                        {isAdmin && (
+                          <Input
+                            type="file"
+                            onChange={handleVideoSlideUpload(index)}
+                            accept="video/*"
+                            className="mt-2"
+                          />
+                        )}
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <CarouselPrevious />
+                  <CarouselNext />
+                </Carousel>
+                <p className="mt-4">Start your fitness journey with our personalized training programs and expert guidance.</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-4">
+                  <a
+                    href="http://www.facebook.com/profile.php?id=100054406724700"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800"
+                  >
+                    <Facebook className="h-5 w-5" />
+                    <span>Facebook</span>
+                  </a>
+                  <a
+                    href="https://www.youtube.com/channel/placeholder"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-2 text-red-600 hover:text-red-800"
+                  >
+                    <Youtube className="h-5 w-5" />
+                    <span>YouTube</span>
+                  </a>
+                  <a
+                    href="tel:4030707"
+                    className="inline-flex items-center space-x-2 text-green-600 hover:text-green-800"
+                  >
+                    <Phone className="h-5 w-5" />
+                    <span>403-0707</span>
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="videos">
+            <Card>
+              <CardHeader>
+                <CardTitle>Training Videos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSearch} className="mb-4">
+                  <div className="flex space-x-2">
+                    <Input
+                      type="text"
+                      placeholder="Search for training videos"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="flex-grow"
+                    />
+                    <Button type="submit">
+                      <Search className="h-4 w-4 mr-2" />
+                      Search
+                    </Button>
+                  </div>
+                </form>
+                {isAdmin && (
+                  <div className="mb-4">
+                    <Input
+                      type="file"
+                      onChange={handleTrainingVideoUpload}
+                      accept="video/*"
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {trainingVideos.map((video) => (
+                    <div key={video.id} className="aspect-video bg-gray-200 rounded-lg overflow-hidden">
+                      <video src={video.url} controls className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                  {trainingVideos.length === 0 && (
+                    <div className="col-span-2 text-center text-gray-500">
+                      No training videos available
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {!isAdmin && (
+            <TabsContent value="progress">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Progress Tracking</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Daily Goal Progress</h3>
+                      <Progress value={caloriesBurned} max={1000} className="w-full" />
+                      <p className="text-sm text-gray-500 mt-1">{caloriesBurned} / 1000 calories burned</p>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Weekly Exercise Summary</h3>
+                      <div style={{ width: '100%', height: 300 }}>
+                        <ResponsiveContainer>
+                          <LineChart data={exerciseData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="calories" stroke="#8884d8" activeDot={{ r: 8 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <FileText className="h-6 w-6 text-gray-400" />
+                      <span>Weight and Body Fat Monitoring PDF</span>
+                    </div>
+                    <Button className="w-full">Upload Progress Photo</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+          <TabsContent value="messages">
+            <Card>
+              <CardHeader>
+                <CardTitle>Messages from Trainer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[1, 2, 3].map((message) => (
+                    <div key={message} className="flex items-start space-x-4">
+                      <MessageSquare className="h-6 w-6 text-gray-400 mt-1" />
+                      <div>
+                        <p className="font-semibold">Message {message}</p>
+                        <p className="text-sm text-gray-500">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {isAdmin && (
+            <TabsContent value="admin">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admin Panel</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Manage Members</h3>
+                      <div className="space-y-2">
+                        {members.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">{member.name}</span>
+                              <span className="text-sm text-gray-500 ml-2">({member.accessCode})</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Button onClick={() => resetPassword(member.id)} size="sm">
+                                Reset Password
+                              </Button>
+                              <Switch
+                                checked={member.isActive}
+                                onCheckedChange={() => toggleMemberAccess(member.id)}
+                              />
+                              <span className="text-sm">{member.isActive ? 'Active' : 'Inactive'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 flex items-center space-x-2">
+                        <Input
+                          placeholder="New member name"
+                          value={newMemberName}
+                          onChange={(e) => setNewMemberName(e.target.value)}
+                        />
+                        <Button onClick={addNewMember}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Member
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Send Message to Members</h3>
+                      <div className="space-y-2">
+                        {members.map((member) => (
+                          <div key={member.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`member-${member.id}`}
+                              checked={selectedMembers.includes(member.id)}
+                              onCheckedChange={() => handleMemberSelection(member.id)}
+                            />
+                            <label htmlFor={`member-${member.id}`}>{member.name}</label>
+                          </div>
+                        ))}
+                      </div>
+                      <Textarea
+                        placeholder="Type your message here"
+                        value={messageContent}
+                        onChange={(e) => setMessageContent(e.target.value)}
+                        className="mt-2"
+                      />
+                      <Button onClick={sendMessage} className="mt-2">
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Message
+                      </Button>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Top Performer</h3>
+                      <Button onClick={congratulateTopPerformer}>
+                        Congratulate Top Performer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+        </Tabs>
+      </main>
+    </div>
+  )
+}
